@@ -81,6 +81,51 @@
     .spinner{width:1.6rem;height:1.6rem;border:3px solid var(--border);border-top-color:#7ee0b0;
       border-radius:50%;animation:spin .8s linear infinite;margin:0 auto 1rem;}
     @keyframes spin{to{transform:rotate(360deg)}}
+    tbody tr{cursor:pointer;}
+    tbody tr:active td{background:rgba(126,224,176,.10);}
+    tbody tr:active td.sticky{background:#204066;}
+    .hint{font-size:.7rem;color:var(--muted);padding:0 .9rem .4rem;font-style:italic;}
+    /* detail sheet */
+    .sheet{position:fixed;inset:0;z-index:50;display:flex;align-items:flex-end;justify-content:center;}
+    .sheet[hidden]{display:none;}
+    .sheet-backdrop{position:absolute;inset:0;background:rgba(0,0,0,.55);animation:fade .18s ease;}
+    .sheet-card{position:relative;width:100%;max-width:34rem;max-height:92vh;background:var(--bg);
+      border-radius:1rem 1rem 0 0;box-shadow:0 -8px 30px rgba(0,0,0,.5);display:flex;flex-direction:column;
+      animation:slideup .22s cubic-bezier(.2,.8,.2,1);padding-bottom:env(safe-area-inset-bottom,0);}
+    @keyframes slideup{from{transform:translateY(100%)}to{transform:translateY(0)}}
+    @keyframes fade{from{opacity:0}to{opacity:1}}
+    .grip{width:2.4rem;height:.28rem;background:var(--border);border-radius:999px;margin:.55rem auto .2rem;}
+    .sheet-head{display:flex;align-items:flex-start;gap:.6rem;padding:.3rem 1rem .1rem;}
+    .sheet-head .tk{font-size:1.25rem;font-weight:700;letter-spacing:.3px;}
+    .sheet-head .nm{color:var(--muted);font-size:.85rem;margin-top:.1rem;}
+    .sheet-head .close{margin-left:auto;background:var(--panel);border:1px solid var(--border);color:var(--text);
+      width:2rem;height:2rem;border-radius:50%;font-size:1rem;cursor:pointer;flex:none;}
+    .sheet-sub{display:flex;align-items:center;gap:.5rem;flex-wrap:wrap;padding:.35rem 1rem .7rem;}
+    .badge{font-size:.72rem;color:var(--muted);background:var(--panel);border:1px solid var(--border);
+      border-radius:999px;padding:.15rem .55rem;}
+    .bigscore{margin-left:auto;font-weight:700;font-size:.8rem;border-radius:.5rem;padding:.25rem .6rem;}
+    .sheet-body{overflow-y:auto;-webkit-overflow-scrolling:touch;padding:0 1rem 1.2rem;}
+    .sec-title{font-size:.72rem;text-transform:uppercase;letter-spacing:.6px;color:var(--muted);
+      margin:1rem 0 .5rem;font-weight:700;}
+    .signals{display:flex;flex-wrap:wrap;gap:.4rem;}
+    .sig{display:inline-flex;align-items:center;gap:.35rem;font-size:.78rem;border-radius:.5rem;
+      padding:.3rem .55rem;border:1px solid var(--border);}
+    .sig.pass{background:var(--yes-bg);color:var(--yes);}
+    .sig.fail{background:var(--no-bg);color:var(--no);}
+    .sig.unk{background:var(--panel);color:var(--muted);}
+    .metrics{display:grid;grid-template-columns:1fr auto;gap:.05rem .8rem;}
+    .metrics .k{padding:.42rem 0;color:var(--muted);font-size:.83rem;border-bottom:1px solid var(--border);}
+    .metrics .v{padding:.42rem 0;text-align:right;font-variant-numeric:tabular-nums;font-size:.86rem;
+      border-bottom:1px solid var(--border);font-weight:600;}
+    .notes{margin-top:.8rem;background:var(--panel);border:1px solid var(--border);border-radius:.6rem;
+      padding:.6rem .7rem;font-size:.8rem;color:#ffd98a;}
+    details.method{margin-top:1rem;border-top:1px solid var(--border);padding-top:.6rem;}
+    details.method summary{cursor:pointer;font-size:.8rem;color:var(--muted);font-weight:600;list-style:none;}
+    details.method summary::-webkit-details-marker{display:none;}
+    details.method summary::before{content:"▸ ";}
+    details.method[open] summary::before{content:"▾ ";}
+    .method dt{font-size:.78rem;font-weight:700;margin-top:.6rem;color:#cfe0f5;}
+    .method dd{font-size:.76rem;color:var(--muted);margin:.15rem 0 0;line-height:1.4;}
   </style>
 </head>
 <body>
@@ -105,8 +150,25 @@
     </div>
   </div>
   <div class="count" id="count"></div>
+  <div class="hint" id="hint"></div>
 
   <div class="tablewrap"><div id="table"></div></div>
+
+  <div class="sheet" id="sheet" hidden>
+    <div class="sheet-backdrop" id="sheetBackdrop"></div>
+    <div class="sheet-card">
+      <div class="grip"></div>
+      <div class="sheet-head">
+        <div>
+          <div class="tk" id="dTk"></div>
+          <div class="nm" id="dNm"></div>
+        </div>
+        <button class="close" id="dClose" aria-label="Close">✕</button>
+      </div>
+      <div class="sheet-sub" id="dSub"></div>
+      <div class="sheet-body" id="dBody"></div>
+    </div>
+  </div>
 
   <script>
   "use strict";
@@ -147,15 +209,31 @@
     if (!state.scanKey || !data.scans[state.scanKey]) {
       state.scanKey = Object.keys(data.scans)[0];
     }
-    const gen = data.generated_at ? data.generated_at.replace("T", " ") : "unknown";
     $("dataAge").innerHTML = (offline ? '<span class="warn">Offline · </span>' : "") +
-      "Published " + gen;
+      "Published " + relAge(data.generated_at);
     renderTabs();
     resetControlsForScan();
     render();
   }
 
   // ---- helpers ----
+  function relAge(iso) {
+    if (!iso) return "unknown";
+    const shown = iso.replace("T", " ").slice(0, 16);
+    const then = new Date(iso), now = new Date();
+    if (isNaN(then)) return shown;
+    const days = Math.floor((now - then) / 86400000);
+    let ago;
+    if (days <= 0) {
+      const hrs = Math.floor((now - then) / 3600000);
+      ago = hrs <= 0 ? "just now" : hrs + "h ago";
+    } else {
+      ago = days === 1 ? "yesterday" : days + "d ago";
+    }
+    const stale = days >= 3 ? ' <span class="warn">· may be stale</span>' : "";
+    return shown + " (" + ago + ")" + stale;
+  }
+
   const isBoolCol = (col) => col.trim().endsWith("?");
   const isCapCol  = (col) => /cap/i.test(col);
 
@@ -305,8 +383,8 @@
               esc(c) + '<span class="arrow">' + arrow + "</span></th>";
     });
     html += "</tr></thead><tbody>";
-    for (const r of rows) {
-      html += "<tr>";
+    rows.forEach((r, ri) => {
+      html += '<tr data-idx="' + ri + '">';
       cols.forEach((c, i) => {
         let cls = i === 0 ? "sticky" : "";
         if (c === "Name") cls += " name";
@@ -314,7 +392,7 @@
         html += '<td class="' + cls.trim() + '">' + cellHTML(c, r[c], sf, sMax) + "</td>";
       });
       html += "</tr>";
-    }
+    });
     html += "</tbody></table>";
     if (rows.length === 0) html = '<div class="msg">No matches. Lower the score filter or clear the search.</div>';
     $("table").innerHTML = html;
@@ -328,7 +406,77 @@
         render();
       };
     });
+    // row tap -> detail sheet
+    document.querySelectorAll("tbody tr[data-idx]").forEach(tr => {
+      tr.onclick = () => openDetail(rows[+tr.getAttribute("data-idx")]);
+    });
+    $("hint").textContent = rows.length ? "Tap any row for the full breakdown" : "";
   }
+
+  // ---- detail sheet ----
+  function openDetail(r) {
+    const scan = state.data.scans[state.scanKey];
+    const sf = scan.score_field;
+    const sMax = scanMax(scan);
+    const cols = scan.columns;
+
+    $("dTk").textContent = r.Ticker || "";
+    $("dNm").textContent = r.Name || "";
+
+    // sub-line: market · sector · sub-industry + score pill
+    const bits = ["Market", "Sector", "Sub-Industry"]
+      .map(k => r[k]).filter(v => v && String(v).trim());
+    const sv = r[sf];
+    const ratio = (typeof sv === "number" && sMax) ? sv / sMax : 0;
+    const scls = ratio >= 0.66 ? "s-hi" : ratio <= 0.33 ? "s-lo" : "s-mid";
+    $("dSub").innerHTML =
+      bits.map(b => '<span class="badge">' + esc(b) + "</span>").join("") +
+      (typeof sv === "number"
+        ? '<span class="bigscore ' + scls + '">' + esc(sf.replace(/\s*\(.*\)/, "")) + ": " + sv + "</span>"
+        : "");
+
+    const identity = new Set(["Ticker", "Name", "Market", "Sector", "Sub-Industry", sf, "Notes/Error"]);
+    const signalCols = cols.filter(c => isBoolCol(c));
+    const metricCols = cols.filter(c => !identity.has(c) && !isBoolCol(c));
+
+    let html = "";
+    if (signalCols.length) {
+      html += '<div class="sec-title">Signals</div><div class="signals">';
+      for (const c of signalCols) {
+        const v = r[c];
+        const truthy = v === true || v === 1 || v === "TRUE" || v === "True";
+        const falsy  = v === false || v === 0 || v === "FALSE" || v === "False";
+        const cls = truthy ? "pass" : falsy ? "fail" : "unk";
+        const mark = truthy ? "✓" : falsy ? "✗" : "—";
+        html += '<span class="sig ' + cls + '">' + mark + " " + esc(c.replace(/\?$/, "")) + "</span>";
+      }
+      html += "</div>";
+    }
+    if (metricCols.length) {
+      html += '<div class="sec-title">Metrics</div><div class="metrics">';
+      for (const c of metricCols) {
+        html += '<div class="k">' + esc(c) + '</div><div class="v">' +
+                cellHTML(c, r[c], sf, sMax) + "</div>";
+      }
+      html += "</div>";
+    }
+    const note = r["Notes/Error"];
+    if (note && String(note).trim()) {
+      html += '<div class="notes">' + esc(String(note)) + "</div>";
+    }
+    if (scan.legend && scan.legend.length) {
+      html += '<details class="method"><summary>What these mean</summary><dl class="method">';
+      for (const [field, def] of scan.legend) {
+        html += "<dt>" + esc(field) + "</dt><dd>" + esc(def) + "</dd>";
+      }
+      html += "</dl></details>";
+    }
+    $("dBody").innerHTML = html;
+    $("dBody").scrollTop = 0;
+    $("sheet").hidden = false;
+  }
+
+  function closeDetail() { $("sheet").hidden = true; }
 
   function esc(s){ return String(s).replace(/[&<>"]/g, c => ({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;"}[c])); }
 
@@ -338,6 +486,9 @@
     state.minScore = +e.target.value; $("scoreVal").textContent = e.target.value; render();
   });
   $("refresh").addEventListener("click", () => { $("dataAge").textContent = "Refreshing…"; loadData(true); });
+  $("dClose").addEventListener("click", closeDetail);
+  $("sheetBackdrop").addEventListener("click", closeDetail);
+  document.addEventListener("keydown", (e) => { if (e.key === "Escape") closeDetail(); });
 
   // ---- boot ----
   loadData(false);
