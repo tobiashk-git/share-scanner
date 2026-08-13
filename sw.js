@@ -6,7 +6,7 @@
 //     when online but the last successful scan still shows when offline.
 // Bump CACHE_VERSION whenever the app shell changes to retire old caches.
 
-const CACHE_VERSION = "scanner-v6";
+const CACHE_VERSION = "scanner-v7";
 const SHELL = [
   "./",
   "./index.html",
@@ -36,9 +36,14 @@ self.addEventListener("fetch", (event) => {
 
   const url = new URL(request.url);
   const isData = url.pathname.endsWith("results.json");
+  // The HTML document (start_url "." or index.html, or any navigation) must be
+  // network-first so a new app version is picked up on the next load. Cache-first
+  // here was why the phone kept showing the old build.
+  const isDoc = request.mode === "navigate" ||
+                url.pathname.endsWith("/") || url.pathname.endsWith("index.html");
 
-  if (isData) {
-    // Network-first: freshest scan wins; fall back to last cached copy offline.
+  if (isData || isDoc) {
+    // Network-first: freshest wins; fall back to cache (or the cached shell) offline.
     event.respondWith(
       fetch(request)
         .then((resp) => {
@@ -46,12 +51,12 @@ self.addEventListener("fetch", (event) => {
           caches.open(CACHE_VERSION).then((cache) => cache.put(request, copy));
           return resp;
         })
-        .catch(() => caches.match(request))
+        .catch(() => caches.match(request).then((m) => m || (isDoc ? caches.match("./index.html") : undefined)))
     );
     return;
   }
 
-  // App shell: cache-first, then network, and cache new shell files as seen.
+  // Other static assets (icons, manifest): cache-first, then network.
   event.respondWith(
     caches.match(request).then((cached) => {
       if (cached) return cached;

@@ -692,7 +692,14 @@
   $("score").addEventListener("input", (e) => {
     state.minScore = +e.target.value; $("scoreVal").textContent = e.target.value; render();
   });
-  $("refresh").addEventListener("click", () => { $("dataAge").textContent = "Refreshing…"; loadData(true); });
+  $("refresh").addEventListener("click", () => {
+    $("dataAge").textContent = "Refreshing…";
+    loadData(true);
+    // also check for a new app version; if found it auto-reloads via controllerchange
+    if ("serviceWorker" in navigator) {
+      navigator.serviceWorker.getRegistration().then((r) => r && r.update());
+    }
+  });
   $("dClose").addEventListener("click", closeDetail);
   $("sheetBackdrop").addEventListener("click", closeDetail);
   document.addEventListener("keydown", (e) => { if (e.key === "Escape") closeDetail(); });
@@ -700,7 +707,21 @@
   // ---- boot ----
   loadData(false);
   if ("serviceWorker" in navigator) {
-    window.addEventListener("load", () => navigator.serviceWorker.register("sw.js").catch(()=>{}));
+    // If this page is already controlled by a SW, a newer SW taking over means a
+    // fresh app version is ready - reload once so it shows immediately.
+    let refreshing = false;
+    if (navigator.serviceWorker.controller) {
+      navigator.serviceWorker.addEventListener("controllerchange", () => {
+        if (refreshing) return;
+        refreshing = true;
+        window.location.reload();
+      });
+    }
+    window.addEventListener("load", () => {
+      navigator.serviceWorker.register("sw.js")
+        .then((reg) => reg.update().catch(() => {}))   // check for a new version each open
+        .catch(() => {});
+    });
   }
   </script>
 </body>
