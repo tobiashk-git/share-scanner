@@ -2,18 +2,348 @@
 <html lang="en">
 <head>
   <meta charset="utf-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
   <title>Share Scanner</title>
+  <meta name="theme-color" content="#1f5496">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+  <meta name="apple-mobile-web-app-title" content="Scanner">
+  <link rel="manifest" href="manifest.webmanifest">
+  <link rel="apple-touch-icon" href="apple-touch-icon.png">
   <style>
-    body { font-family: system-ui, -apple-system, sans-serif; max-width: 34rem;
-           margin: 3rem auto; padding: 0 1.25rem; line-height: 1.5; color: #1a1a1a; }
-    code { background: #f0f0f0; padding: .1rem .35rem; border-radius: .25rem; }
-    .muted { color: #666; }
+    :root{
+      --bg:#12233a; --panel:#182f4a; --panel2:#1e3a5c; --accent:#1f5496;
+      --text:#e6edf5; --muted:#9fb2c8; --border:rgba(255,255,255,.09);
+      --yes-bg:rgba(63,179,127,.20); --yes:#7ee0b0;
+      --no-bg:rgba(217,100,122,.16); --no:#e5889b;
+      --safe-t:env(safe-area-inset-top,0px);
+    }
+    *{box-sizing:border-box}
+    html,body{margin:0;background:var(--bg);color:var(--text);
+      font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",system-ui,sans-serif;
+      -webkit-text-size-adjust:100%;}
+    header{position:sticky;top:0;z-index:20;background:var(--accent);
+      padding:calc(var(--safe-t) + .6rem) .9rem .6rem;box-shadow:0 1px 0 rgba(0,0,0,.25);}
+    .hrow{display:flex;align-items:center;gap:.6rem;}
+    .htitle{font-size:1.05rem;font-weight:650;letter-spacing:.2px;flex:1;}
+    .hbtn{background:rgba(255,255,255,.15);border:none;color:#fff;border-radius:.5rem;
+      padding:.35rem .6rem;font-size:.8rem;font-weight:600;cursor:pointer;}
+    .hbtn:active{background:rgba(255,255,255,.28);}
+    .subtle{font-size:.72rem;color:#cfe0f5;margin-top:.25rem;}
+    .subtle .warn{color:#ffd98a;}
+    /* scan tabs */
+    .tabs{display:flex;gap:.4rem;overflow-x:auto;padding:.55rem .9rem;background:var(--panel);
+      position:sticky;top:calc(var(--safe-t) + 2.9rem);z-index:15;border-bottom:1px solid var(--border);
+      -webkit-overflow-scrolling:touch;}
+    .tab{white-space:nowrap;background:transparent;border:1px solid var(--border);color:var(--muted);
+      border-radius:999px;padding:.35rem .8rem;font-size:.8rem;font-weight:600;cursor:pointer;}
+    .tab.active{background:var(--accent);border-color:var(--accent);color:#fff;}
+    .tab small{opacity:.7;font-weight:500;}
+    /* controls */
+    .controls{padding:.6rem .9rem;display:flex;flex-direction:column;gap:.55rem;background:var(--bg);}
+    .search{width:100%;background:var(--panel);border:1px solid var(--border);color:var(--text);
+      border-radius:.6rem;padding:.55rem .7rem;font-size:.9rem;}
+    .search::placeholder{color:var(--muted);}
+    .crow{display:flex;align-items:center;gap:.5rem;flex-wrap:wrap;}
+    .seg{display:inline-flex;background:var(--panel);border:1px solid var(--border);border-radius:.55rem;overflow:hidden;}
+    .seg button{background:transparent;border:none;color:var(--muted);padding:.35rem .7rem;font-size:.78rem;font-weight:600;cursor:pointer;}
+    .seg button.on{background:var(--accent);color:#fff;}
+    .scorewrap{flex:1;min-width:160px;display:flex;align-items:center;gap:.55rem;}
+    .scorewrap label{font-size:.75rem;color:var(--muted);white-space:nowrap;}
+    .scorewrap input[type=range]{flex:1;accent-color:#3fb37f;}
+    .scoreval{font-variant-numeric:tabular-nums;font-weight:700;min-width:1.4rem;text-align:center;}
+    .count{font-size:.72rem;color:var(--muted);padding:0 .9rem .3rem;}
+    /* table */
+    .tablewrap{overflow:auto;-webkit-overflow-scrolling:touch;border-top:1px solid var(--border);}
+    table{border-collapse:separate;border-spacing:0;width:max-content;min-width:100%;
+      font-size:.8rem;font-variant-numeric:tabular-nums;}
+    thead th{position:sticky;top:0;z-index:5;background:var(--panel2);color:#dbe8fa;
+      font-weight:600;text-align:right;padding:.5rem .55rem;white-space:nowrap;cursor:pointer;
+      border-bottom:1px solid var(--border);user-select:none;}
+    thead th .arrow{opacity:.5;font-size:.7em;}
+    tbody td{padding:.45rem .55rem;text-align:right;white-space:nowrap;border-bottom:1px solid var(--border);}
+    /* sticky first column (Ticker) */
+    th.sticky,td.sticky{position:sticky;left:0;z-index:6;text-align:left;background:var(--panel);
+      box-shadow:1px 0 0 var(--border);font-weight:600;}
+    thead th.sticky{z-index:8;background:var(--panel2);}
+    tbody tr:nth-child(2n) td{background:rgba(255,255,255,.02);}
+    tbody tr:nth-child(2n) td.sticky{background:#1a3352;}
+    .yes{color:var(--yes);background:var(--yes-bg);border-radius:.35rem;padding:.05rem .4rem;font-weight:700;}
+    .no{color:var(--no);background:var(--no-bg);border-radius:.35rem;padding:.05rem .4rem;}
+    .muted{color:var(--muted);}
+    td.score .pill{display:inline-block;min-width:1.4rem;text-align:center;border-radius:.35rem;padding:.05rem .4rem;font-weight:700;}
+    .s-hi{background:var(--yes-bg);color:var(--yes);}
+    .s-mid{background:rgba(255,214,138,.15);color:#ffd98a;}
+    .s-lo{background:var(--no-bg);color:var(--no);}
+    .name{max-width:12rem;overflow:hidden;text-overflow:ellipsis;}
+    /* states */
+    .msg{padding:2.5rem 1.5rem;text-align:center;color:var(--muted);}
+    .spinner{width:1.6rem;height:1.6rem;border:3px solid var(--border);border-top-color:#7ee0b0;
+      border-radius:50%;animation:spin .8s linear infinite;margin:0 auto 1rem;}
+    @keyframes spin{to{transform:rotate(360deg)}}
   </style>
 </head>
 <body>
-  <h1>Share Scanner</h1>
-  <p>Pipeline is live. The phone app arrives in Phase 2.</p>
-  <p class="muted">Latest scan data: <a href="results.json">results.json</a></p>
+  <header>
+    <div class="hrow">
+      <div class="htitle">Share Scanner</div>
+      <button class="hbtn" id="refresh">↻ Refresh</button>
+    </div>
+    <div class="subtle" id="dataAge">Loading…</div>
+  </header>
+
+  <div class="tabs" id="tabs"></div>
+  <div class="controls" id="controls" style="display:none">
+    <input class="search" id="search" type="search" placeholder="Search ticker or name…" autocomplete="off" autocapitalize="characters">
+    <div class="crow">
+      <div class="seg" id="market"></div>
+      <div class="scorewrap">
+        <label id="scoreLabel">Score ≥</label>
+        <input type="range" id="score" min="0" max="4" step="1" value="0">
+        <span class="scoreval" id="scoreVal">0</span>
+      </div>
+    </div>
+  </div>
+  <div class="count" id="count"></div>
+
+  <div class="tablewrap"><div id="table"></div></div>
+
+  <script>
+  "use strict";
+  const $ = (id) => document.getElementById(id);
+  const HIDDEN_COLS = new Set(["Notes/Error"]); // don't clutter the table with mostly-empty error text
+
+  const state = {
+    data: null,
+    scanKey: null,
+    minScore: 0,
+    market: "All",
+    query: "",
+    sortCol: null,
+    sortDir: "desc",
+  };
+
+  // ---- data loading (network-first; falls back to last saved copy offline) ----
+  async function loadData(force) {
+    try {
+      const resp = await fetch("results.json", { cache: force ? "no-store" : "default" });
+      if (!resp.ok) throw new Error("HTTP " + resp.status);
+      const data = await resp.json();
+      localStorage.setItem("scanner_data", JSON.stringify(data));
+      applyData(data, false);
+    } catch (e) {
+      const saved = localStorage.getItem("scanner_data");
+      if (saved) {
+        applyData(JSON.parse(saved), true);
+      } else {
+        $("dataAge").textContent = "Couldn't load scan data (offline, nothing saved yet).";
+        $("table").innerHTML = '<div class="msg">No data available.<br>Connect to the internet once to load the latest scans.</div>';
+      }
+    }
+  }
+
+  function applyData(data, offline) {
+    state.data = data;
+    if (!state.scanKey || !data.scans[state.scanKey]) {
+      state.scanKey = Object.keys(data.scans)[0];
+    }
+    const gen = data.generated_at ? data.generated_at.replace("T", " ") : "unknown";
+    $("dataAge").innerHTML = (offline ? '<span class="warn">Offline · </span>' : "") +
+      "Published " + gen;
+    renderTabs();
+    resetControlsForScan();
+    render();
+  }
+
+  // ---- helpers ----
+  const isBoolCol = (col) => col.trim().endsWith("?");
+  const isCapCol  = (col) => /cap/i.test(col);
+
+  function scanMax(scan) {
+    let m = 0;
+    for (const r of scan.rows) {
+      const v = r[scan.score_field];
+      if (typeof v === "number" && v > m) m = v;
+    }
+    return m || 4;
+  }
+
+  function fmtCap(v) {
+    const a = Math.abs(v);
+    if (a >= 1e12) return (v/1e12).toFixed(2) + "T";
+    if (a >= 1e9)  return (v/1e9 ).toFixed(2) + "B";
+    if (a >= 1e6)  return (v/1e6 ).toFixed(1) + "M";
+    return v.toLocaleString();
+  }
+
+  function cellHTML(col, v, scoreField, sMax) {
+    if (v === null || v === undefined || v === "") return '<span class="muted">—</span>';
+    if (isBoolCol(col)) {
+      const truthy = v === true || v === 1 || v === "TRUE" || v === "True";
+      const falsy  = v === false || v === 0 || v === "FALSE" || v === "False";
+      if (truthy) return '<span class="yes">✓</span>';
+      if (falsy)  return '<span class="no">✗</span>';
+      return '<span class="muted">—</span>';
+    }
+    if (col === scoreField && typeof v === "number") {
+      const ratio = sMax ? v / sMax : 0;
+      const cls = ratio >= 0.66 ? "s-hi" : ratio <= 0.33 ? "s-lo" : "s-mid";
+      return '<span class="pill ' + cls + '">' + v + "</span>";
+    }
+    if (typeof v === "number") {
+      if (isCapCol(col)) return fmtCap(v);
+      if (Number.isInteger(v) && Math.abs(v) >= 10000) return v.toLocaleString();
+      return String(v);
+    }
+    return String(v);
+  }
+
+  // ---- rendering ----
+  function renderTabs() {
+    const tabs = $("tabs");
+    tabs.innerHTML = "";
+    for (const [key, scan] of Object.entries(state.data.scans)) {
+      const b = document.createElement("button");
+      b.className = "tab" + (key === state.scanKey ? " active" : "");
+      const label = shortTitle(scan.title);
+      b.innerHTML = label + " <small>" + scan.rows.length + "</small>";
+      b.onclick = () => { state.scanKey = key; resetControlsForScan(); render(); renderTabs(); };
+      tabs.appendChild(b);
+    }
+  }
+
+  function shortTitle(t) {
+    if (/watchlist/i.test(t)) return "Watchlist";
+    if (/broad/i.test(t)) return "Broad";
+    if (/oversold/i.test(t)) return "Oversold";
+    return t.split(" ")[0];
+  }
+
+  function resetControlsForScan() {
+    const scan = state.data.scans[state.scanKey];
+    const sMax = scanMax(scan);
+    // default: show a shortlist near the top (max-1), user can slide down to 0
+    state.minScore = Math.max(0, sMax - 1);
+    state.market = "All";
+    state.query = "";
+    state.sortCol = scan.score_field;
+    state.sortDir = "desc";
+
+    $("controls").style.display = "flex";
+    $("search").value = "";
+
+    // market segmented control
+    const markets = ["All", ...Array.from(new Set(scan.rows.map(r => r.Market).filter(Boolean))).sort()];
+    const seg = $("market");
+    seg.innerHTML = "";
+    for (const m of markets) {
+      const b = document.createElement("button");
+      b.textContent = m;
+      b.className = m === state.market ? "on" : "";
+      b.onclick = () => { state.market = m; syncSeg(); render(); };
+      seg.appendChild(b);
+    }
+    // score slider
+    const sl = $("score");
+    sl.max = sMax; sl.value = state.minScore;
+    $("scoreVal").textContent = state.minScore;
+    $("scoreLabel").textContent = (scan.score_field.includes("Quality") ? "Quality ≥" : "Score ≥");
+  }
+
+  function syncSeg() {
+    [...$("market").children].forEach(b => b.className = b.textContent === state.market ? "on" : "");
+  }
+
+  function currentRows() {
+    const scan = state.data.scans[state.scanKey];
+    const sf = scan.score_field;
+    const q = state.query.trim().toLowerCase();
+    let rows = scan.rows.filter(r => {
+      const sv = r[sf];
+      if (typeof sv !== "number") return false;         // drop failed/errored rows
+      if (q) {
+        // An explicit ticker/name search finds the stock regardless of the
+        // score slider or market toggle - otherwise a low-scorer looks "missing".
+        const hay = ((r.Ticker || "") + " " + (r.Name || "")).toLowerCase();
+        return hay.includes(q);
+      }
+      if (sv < state.minScore) return false;
+      if (state.market !== "All" && r.Market !== state.market) return false;
+      return true;
+    });
+    const col = state.sortCol, dir = state.sortDir === "asc" ? 1 : -1;
+    rows.sort((a, b) => {
+      let x = a[col], y = b[col];
+      const xn = (x === null || x === undefined || x === ""), yn = (y === null || y === undefined || y === "");
+      if (xn && yn) return 0;
+      if (xn) return 1;        // nulls always last
+      if (yn) return -1;
+      if (typeof x === "number" && typeof y === "number") return (x - y) * dir;
+      return String(x).localeCompare(String(y)) * dir;
+    });
+    return rows;
+  }
+
+  function render() {
+    const scan = state.data.scans[state.scanKey];
+    const sf = scan.score_field;
+    const sMax = scanMax(scan);
+    // column order: Ticker, Name, <score>, then the rest (minus hidden & dupes)
+    let cols = scan.columns.filter(c => !HIDDEN_COLS.has(c));
+    const front = ["Ticker", "Name", sf];
+    cols = [...front.filter(c => cols.includes(c)), ...cols.filter(c => !front.includes(c))];
+
+    const rows = currentRows();
+    $("count").textContent = rows.length + " of " +
+      scan.rows.filter(r => typeof r[sf] === "number").length + " shown" +
+      (scan.last_run ? "  ·  scan run " + scan.last_run : "");
+
+    let html = "<table><thead><tr>";
+    cols.forEach((c, i) => {
+      const arrow = c === state.sortCol ? (state.sortDir === "asc" ? " ▲" : " ▼") : "";
+      html += '<th class="' + (i === 0 ? "sticky" : "") + '" data-col="' + esc(c) + '">' +
+              esc(c) + '<span class="arrow">' + arrow + "</span></th>";
+    });
+    html += "</tr></thead><tbody>";
+    for (const r of rows) {
+      html += "<tr>";
+      cols.forEach((c, i) => {
+        let cls = i === 0 ? "sticky" : "";
+        if (c === "Name") cls += " name";
+        if (c === sf) cls += " score";
+        html += '<td class="' + cls.trim() + '">' + cellHTML(c, r[c], sf, sMax) + "</td>";
+      });
+      html += "</tr>";
+    }
+    html += "</tbody></table>";
+    if (rows.length === 0) html = '<div class="msg">No matches. Lower the score filter or clear the search.</div>';
+    $("table").innerHTML = html;
+
+    // header sort handlers
+    document.querySelectorAll("thead th").forEach(th => {
+      th.onclick = () => {
+        const c = th.getAttribute("data-col");
+        if (state.sortCol === c) state.sortDir = state.sortDir === "asc" ? "desc" : "asc";
+        else { state.sortCol = c; state.sortDir = (c === "Ticker" || c === "Name") ? "asc" : "desc"; }
+        render();
+      };
+    });
+  }
+
+  function esc(s){ return String(s).replace(/[&<>"]/g, c => ({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;"}[c])); }
+
+  // ---- events ----
+  $("search").addEventListener("input", (e) => { state.query = e.target.value; render(); });
+  $("score").addEventListener("input", (e) => {
+    state.minScore = +e.target.value; $("scoreVal").textContent = e.target.value; render();
+  });
+  $("refresh").addEventListener("click", () => { $("dataAge").textContent = "Refreshing…"; loadData(true); });
+
+  // ---- boot ----
+  loadData(false);
+  if ("serviceWorker" in navigator) {
+    window.addEventListener("load", () => navigator.serviceWorker.register("sw.js").catch(()=>{}));
+  }
+  </script>
 </body>
 </html>

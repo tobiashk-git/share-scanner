@@ -1,0 +1,16 @@
+{
+  "name": "Share Scanner",
+  "short_name": "Scanner",
+  "description": "Daily accumulation and oversold-quality stock scans",
+  "start_url": ".",
+  "scope": ".",
+  "display": "standalone",
+  "orientation": "portrait",
+  "background_color": "#12233a",
+  "theme_color": "#1f5496",
+  "icons": [
+    { "src": "icon-192.png", "sizes": "192x192", "type": "image/png", "purpose": "any" },
+    { "src": "icon-512.png", "sizes": "512x512", "type": "image/png", "purpose": "any" },
+    { "src": "icon-512.png", "sizes": "512x512", "type": "image/png", "purpose": "maskable" }
+  ]
+}
