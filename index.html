@@ -126,6 +126,23 @@
     details.method[open] summary::before{content:"▾ ";}
     .method dt{font-size:.78rem;font-weight:700;margin-top:.6rem;color:#cfe0f5;}
     .method dd{font-size:.76rem;color:var(--muted);margin:.15rem 0 0;line-height:1.4;}
+    /* watchlist star + stale */
+    .star{display:inline-block;width:1.25rem;text-align:center;cursor:pointer;font-size:1.02rem;
+      color:var(--muted);-webkit-tap-highlight-color:transparent;user-select:none;}
+    .star.on{color:#ffcf4d;}
+    .tkcell{display:inline-flex;align-items:center;gap:.25rem;}
+    .staleflag{color:#ffd98a;margin-left:.25rem;font-size:.82em;}
+    tbody tr.stale td:not(.sticky){opacity:.6;}
+    .tab small.wl{color:#ffcf4d;}
+    /* watch toggle + stale banner in detail sheet */
+    .watchbtn{display:inline-flex;align-items:center;gap:.4rem;margin:.4rem 0 .2rem;
+      background:var(--panel);border:1px solid var(--border);color:var(--text);
+      border-radius:.6rem;padding:.5rem .85rem;font-size:.85rem;font-weight:600;cursor:pointer;}
+    .watchbtn.on{background:rgba(255,207,77,.16);border-color:rgba(255,207,77,.45);color:#ffcf4d;}
+    .stalebanner{margin:.5rem 0 .2rem;background:rgba(255,217,138,.12);border:1px solid rgba(255,217,138,.3);
+      border-radius:.6rem;padding:.5rem .7rem;font-size:.78rem;color:#ffd98a;}
+    .emptywl{padding:2.5rem 1.5rem;text-align:center;color:var(--muted);line-height:1.6;}
+    .emptywl .big{font-size:1.6rem;display:block;margin-bottom:.5rem;}
   </style>
 </head>
 <body>
@@ -175,15 +192,59 @@
   const $ = (id) => document.getElementById(id);
   const HIDDEN_COLS = new Set(["Notes/Error"]); // don't clutter the table with mostly-empty error text
 
+  // The two strategies, each with a paired user-curated watchlist. Only these
+  // scan keys are shown (the old defensive "watchlist" scan is no longer a tab).
+  const STRATEGY_DEFS = [
+    { key: "broad",    label: "150" },
+    { key: "oversold", label: "Oversold" },
+  ];
+
   const state = {
     data: null,
-    scanKey: null,
+    scanKey: null,           // active strategy scan key: "broad" | "oversold"
+    tabType: "strategy",     // "strategy" | "watchlist"
     minScore: 0,
     market: "All",
     query: "",
     sortCol: null,
     sortDir: "desc",
   };
+
+  // ---- watchlists (persisted on THIS device) ----
+  // Shape: { broad: {TICKER: {row:{...}, asOf:"..."}}, oversold: {...} }
+  // Each entry caches the last-seen scan row so a ticker that later drops out
+  // of the scan still shows its last-known data with an "as of" date.
+  const WL_KEY = "scanner_watchlists";
+  function loadWL() {
+    try { return JSON.parse(localStorage.getItem(WL_KEY)) || {}; } catch (e) { return {}; }
+  }
+  function saveWL(wl) { localStorage.setItem(WL_KEY, JSON.stringify(wl)); }
+  function wlFor(key) { const wl = loadWL(); return wl[key] || {}; }
+  function isWatched(key, ticker) { return !!wlFor(key)[ticker]; }
+  function toggleWatch(key, ticker, row, stamp) {
+    const wl = loadWL();
+    if (!wl[key]) wl[key] = {};
+    if (wl[key][ticker]) delete wl[key][ticker];
+    else wl[key][ticker] = { row: row, asOf: stamp };
+    saveWL(wl);
+  }
+  function scanStamp(scan) { return scan.last_run || (state.data && state.data.generated_at) || ""; }
+  // On each data load, refresh the cached snapshot for any watched ticker that
+  // appears in the newest scan (membership is kept regardless).
+  function refreshWatchlistSnapshots() {
+    const wl = loadWL();
+    let changed = false;
+    for (const def of STRATEGY_DEFS) {
+      const scan = state.data.scans[def.key];
+      if (!scan || !wl[def.key]) continue;
+      const stamp = scanStamp(scan);
+      const byTicker = new Map(scan.rows.map(r => [r.Ticker, r]));
+      for (const tkr of Object.keys(wl[def.key])) {
+        if (byTicker.has(tkr)) { wl[def.key][tkr] = { row: byTicker.get(tkr), asOf: stamp }; changed = true; }
+      }
+    }
+    if (changed) saveWL(wl);
+  }
 
   // ---- data loading (network-first; falls back to last saved copy offline) ----
   async function loadData(force) {
@@ -206,9 +267,11 @@
 
   function applyData(data, offline) {
     state.data = data;
+    const avail = STRATEGY_DEFS.map(d => d.key).filter(k => data.scans[k]);
     if (!state.scanKey || !data.scans[state.scanKey]) {
-      state.scanKey = Object.keys(data.scans)[0];
+      state.scanKey = avail[0] || Object.keys(data.scans)[0];
     }
+    refreshWatchlistSnapshots();
     $("dataAge").innerHTML = (offline ? '<span class="warn">Offline · </span>' : "") +
       "Published " + relAge(data.generated_at);
     renderTabs();
@@ -280,28 +343,38 @@
   function renderTabs() {
     const tabs = $("tabs");
     tabs.innerHTML = "";
-    for (const [key, scan] of Object.entries(state.data.scans)) {
-      const b = document.createElement("button");
-      b.className = "tab" + (key === state.scanKey ? " active" : "");
-      const label = shortTitle(scan.title);
-      b.innerHTML = label + " <small>" + scan.rows.length + "</small>";
-      b.onclick = () => { state.scanKey = key; resetControlsForScan(); render(); renderTabs(); };
-      tabs.appendChild(b);
+    for (const def of STRATEGY_DEFS) {
+      if (!state.data.scans[def.key]) continue;
+      // strategy tab
+      addTab(tabs, def.label + " Strategy", "strategy", def.key,
+             state.data.scans[def.key].rows.filter(r => typeof r[state.data.scans[def.key].score_field] === "number").length, false);
+      // paired watchlist tab
+      const n = Object.keys(wlFor(def.key)).length;
+      addTab(tabs, def.label + " Watchlist", "watchlist", def.key, n, true);
     }
   }
 
-  function shortTitle(t) {
-    if (/watchlist/i.test(t)) return "Watchlist";
-    if (/broad/i.test(t)) return "150 Strategy";
-    if (/oversold/i.test(t)) return "Oversold Strategy";
-    return t.split(" ")[0];
+  function addTab(container, label, type, key, count, isWL) {
+    const b = document.createElement("button");
+    const active = type === state.tabType && key === state.scanKey;
+    b.className = "tab" + (active ? " active" : "");
+    const star = isWL ? "★ " : "";
+    const small = isWL ? '<small class="wl">' + star + count + "</small>"
+                       : "<small>" + count + "</small>";
+    b.innerHTML = label + " " + small;
+    b.onclick = () => {
+      state.scanKey = key; state.tabType = type;
+      resetControlsForScan(); render(); renderTabs();
+    };
+    container.appendChild(b);
   }
 
   function resetControlsForScan() {
     const scan = state.data.scans[state.scanKey];
     const sMax = scanMax(scan);
-    // default: show a shortlist near the top (max-1), user can slide down to 0
-    state.minScore = Math.max(0, sMax - 1);
+    // Strategy: default to a shortlist near the top (max-1). Watchlist: show all
+    // watched names (score >= 0), you curated them yourself.
+    state.minScore = state.tabType === "watchlist" ? 0 : Math.max(0, sMax - 1);
     state.market = "All";
     state.query = "";
     state.sortCol = scan.score_field;
@@ -310,8 +383,9 @@
     $("controls").style.display = "flex";
     $("search").value = "";
 
-    // market segmented control
-    const markets = ["All", ...Array.from(new Set(scan.rows.map(r => r.Market).filter(Boolean))).sort()];
+    // market segmented control (from the rows this tab can show)
+    const src = state.tabType === "watchlist" ? watchlistRows().map(e => e.r) : scan.rows;
+    const markets = ["All", ...Array.from(new Set(src.map(r => r.Market).filter(Boolean))).sort()];
     const seg = $("market");
     seg.innerHTML = "";
     for (const m of markets) {
@@ -332,26 +406,50 @@
     [...$("market").children].forEach(b => b.className = b.textContent === state.market ? "on" : "");
   }
 
+  // Build watchlist entries for the active strategy: live scan row when the
+  // ticker is still in the latest scan, else the cached snapshot (marked stale).
+  function watchlistRows() {
+    const key = state.scanKey;
+    const scan = state.data.scans[key];
+    const live = new Map(scan.rows.map(r => [r.Ticker, r]));
+    const wl = wlFor(key);
+    const stamp = scanStamp(scan);
+    const out = [];
+    for (const tkr of Object.keys(wl)) {
+      if (live.has(tkr)) out.push({ r: live.get(tkr), stale: false, asOf: stamp });
+      else out.push({ r: wl[tkr].row, stale: true, asOf: wl[tkr].asOf });
+    }
+    return out;
+  }
+
+  // Returns entries {r, stale, asOf} for the active tab, filtered + sorted.
   function currentRows() {
     const scan = state.data.scans[state.scanKey];
     const sf = scan.score_field;
     const q = state.query.trim().toLowerCase();
-    let rows = scan.rows.filter(r => {
-      const sv = r[sf];
-      if (typeof sv !== "number") return false;         // drop failed/errored rows
+    const isWL = state.tabType === "watchlist";
+    const stamp = scanStamp(scan);
+
+    let entries = isWL
+      ? watchlistRows()
+      : scan.rows.map(r => ({ r, stale: false, asOf: stamp }));
+
+    entries = entries.filter(({ r }) => {
       if (q) {
-        // An explicit ticker/name search finds the stock regardless of the
-        // score slider or market toggle - otherwise a low-scorer looks "missing".
+        // A ticker/name search finds the stock regardless of score slider or market.
         const hay = ((r.Ticker || "") + " " + (r.Name || "")).toLowerCase();
         return hay.includes(q);
       }
-      if (sv < state.minScore) return false;
+      const sv = r[sf];
+      if (!isWL && typeof sv !== "number") return false;   // strategy: drop errored rows
+      if (typeof sv === "number" && sv < state.minScore) return false;
       if (state.market !== "All" && r.Market !== state.market) return false;
       return true;
     });
+
     const col = state.sortCol, dir = state.sortDir === "asc" ? 1 : -1;
-    rows.sort((a, b) => {
-      let x = a[col], y = b[col];
+    entries.sort((A, B) => {
+      let x = A.r[col], y = B.r[col];
       const xn = (x === null || x === undefined || x === ""), yn = (y === null || y === undefined || y === "");
       if (xn && yn) return 0;
       if (xn) return 1;        // nulls always last
@@ -359,22 +457,44 @@
       if (typeof x === "number" && typeof y === "number") return (x - y) * dir;
       return String(x).localeCompare(String(y)) * dir;
     });
-    return rows;
+    return entries;
   }
 
   function render() {
     const scan = state.data.scans[state.scanKey];
     const sf = scan.score_field;
     const sMax = scanMax(scan);
+    const isWL = state.tabType === "watchlist";
     // column order: Ticker, Name, <score>, then the rest (minus hidden & dupes)
     let cols = scan.columns.filter(c => !HIDDEN_COLS.has(c));
     const front = ["Ticker", "Name", sf];
     cols = [...front.filter(c => cols.includes(c)), ...cols.filter(c => !front.includes(c))];
 
-    const rows = currentRows();
-    $("count").textContent = rows.length + " of " +
-      scan.rows.filter(r => typeof r[sf] === "number").length + " shown" +
-      (scan.last_run ? "  ·  scan run " + scan.last_run : "");
+    const entries = currentRows();
+    const byTkr = {};
+    entries.forEach(e => { byTkr[e.r.Ticker] = e; });
+
+    // count line
+    if (isWL) {
+      const total = Object.keys(wlFor(state.scanKey)).length;
+      const staleN = entries.filter(e => e.stale).length;
+      $("count").textContent = total === 0 ? "" :
+        entries.length + " watched" + (staleN ? "  ·  " + staleN + " not in latest scan" : "");
+    } else {
+      $("count").textContent = entries.length + " of " +
+        scan.rows.filter(r => typeof r[sf] === "number").length + " shown" +
+        (scan.last_run ? "  ·  scan run " + scan.last_run : "");
+    }
+
+    // empty watchlist (nothing added yet)
+    if (isWL && Object.keys(wlFor(state.scanKey)).length === 0) {
+      const label = STRATEGY_DEFS.find(d => d.key === state.scanKey).label;
+      $("table").innerHTML = '<div class="emptywl"><span class="big">☆</span>' +
+        "Your " + label + " watchlist is empty.<br>Open the <b>" + label +
+        " Strategy</b> tab and tap the ☆ next to a stock to add it here.</div>";
+      $("hint").textContent = "";
+      return;
+    }
 
     let html = "<table><thead><tr>";
     cols.forEach((c, i) => {
@@ -383,18 +503,29 @@
               esc(c) + '<span class="arrow">' + arrow + "</span></th>";
     });
     html += "</tr></thead><tbody>";
-    rows.forEach((r, ri) => {
-      html += '<tr data-idx="' + ri + '">';
+    entries.forEach((e, ri) => {
+      html += '<tr data-idx="' + ri + '"' + (e.stale ? ' class="stale"' : "") + ">";
       cols.forEach((c, i) => {
         let cls = i === 0 ? "sticky" : "";
         if (c === "Name") cls += " name";
         if (c === sf) cls += " score";
-        html += '<td class="' + cls.trim() + '">' + cellHTML(c, r[c], sf, sMax) + "</td>";
+        let inner;
+        if (i === 0) {
+          const tkr = e.r.Ticker;
+          const watched = isWatched(state.scanKey, tkr);
+          inner = '<span class="tkcell"><span class="star ' + (watched ? "on" : "") +
+                  '" data-tkr="' + esc(tkr) + '">' + (watched ? "★" : "☆") + "</span>" +
+                  esc(tkr) + (e.stale ? ' <span class="staleflag" title="Not in latest scan">⚠</span>' : "") +
+                  "</span>";
+        } else {
+          inner = cellHTML(c, e.r[c], sf, sMax);
+        }
+        html += '<td class="' + cls.trim() + '">' + inner + "</td>";
       });
       html += "</tr>";
     });
     html += "</tbody></table>";
-    if (rows.length === 0) html = '<div class="msg">No matches. Lower the score filter or clear the search.</div>';
+    if (entries.length === 0) html = '<div class="msg">No matches. Lower the score filter or clear the search.</div>';
     $("table").innerHTML = html;
 
     // header sort handlers
@@ -406,15 +537,27 @@
         render();
       };
     });
+    // star tap -> add/remove from this strategy's watchlist (don't open detail)
+    document.querySelectorAll(".star[data-tkr]").forEach(el => {
+      el.onclick = (ev) => {
+        ev.stopPropagation();
+        const tkr = el.getAttribute("data-tkr");
+        toggleWatch(state.scanKey, tkr, byTkr[tkr].r, scanStamp(scan));
+        renderTabs(); render();
+      };
+    });
     // row tap -> detail sheet
     document.querySelectorAll("tbody tr[data-idx]").forEach(tr => {
-      tr.onclick = () => openDetail(rows[+tr.getAttribute("data-idx")]);
+      tr.onclick = () => openDetail(entries[+tr.getAttribute("data-idx")]);
     });
-    $("hint").textContent = rows.length ? "Tap any row for the full breakdown" : "";
+    $("hint").textContent = entries.length
+      ? (isWL ? "Tap ★ to remove · tap a row for details" : "Tap ☆ to watch · tap a row for details")
+      : "";
   }
 
   // ---- detail sheet ----
-  function openDetail(r) {
+  function openDetail(entry) {
+    const r = entry.r;
     const scan = state.data.scans[state.scanKey];
     const sf = scan.score_field;
     const sMax = scanMax(scan);
@@ -440,6 +583,16 @@
     const metricCols = cols.filter(c => !identity.has(c) && !isBoolCol(c));
 
     let html = "";
+    // watch toggle for the active strategy's watchlist
+    const stratLabel = STRATEGY_DEFS.find(d => d.key === state.scanKey).label;
+    const watched = isWatched(state.scanKey, r.Ticker);
+    html += '<button class="watchbtn ' + (watched ? "on" : "") + '" id="dWatch">' +
+      (watched ? "★ Watching " + stratLabel + " — tap to remove"
+               : "☆ Add to " + stratLabel + " Watchlist") + "</button>";
+    if (entry.stale) {
+      html += '<div class="stalebanner">Not in the latest scan · data as of ' +
+              esc(entry.asOf || "unknown") + "</div>";
+    }
     if (signalCols.length) {
       html += '<div class="sec-title">Signals</div><div class="signals">';
       for (const c of signalCols) {
@@ -474,6 +627,13 @@
     $("dBody").innerHTML = html;
     $("dBody").scrollTop = 0;
     $("sheet").hidden = false;
+
+    const wb = $("dBody").querySelector("#dWatch");
+    if (wb) wb.onclick = () => {
+      toggleWatch(state.scanKey, r.Ticker, r, scanStamp(scan));
+      renderTabs(); render();
+      openDetail(entry);   // rebuild the sheet so the button label flips, keep it open
+    };
   }
 
   function closeDetail() { $("sheet").hidden = true; }
