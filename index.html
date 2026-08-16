@@ -208,6 +208,13 @@
     .dash .dv .dvv.up{color:var(--good);} .dash .dv .dvv.down{color:var(--bad);} .dash .dv .dvv.na{color:var(--muted);font-weight:500;}
     .dash .dnote{background:var(--panel);border:1px solid var(--border);border-radius:.5rem;
       padding:.5rem .6rem;font-size:.72rem;color:var(--muted);margin-top:.5rem;}
+    /* multi-year trend rows (sparklines) */
+    .dash .trow{display:grid;grid-template-columns:5.4rem 1fr 4.3rem;align-items:center;gap:.5rem;margin:.55rem 0;}
+    .dash .trow .tk2{font-size:.75rem;color:var(--muted);}
+    .dash .trow .spark{width:100%;height:26px;display:block;}
+    .dash .trow .tvv{font-size:.78rem;font-weight:700;text-align:right;font-variant-numeric:tabular-nums;white-space:nowrap;}
+    .dash .trow .tvv.up{color:var(--good);} .dash .trow .tvv.down{color:var(--bad);} .dash .trow .tvv.na{color:var(--muted);font-weight:500;}
+    .dash .trow .sparkna{font-size:.72rem;color:var(--muted);}
   </style>
 </head>
 <body>
@@ -641,7 +648,48 @@
     return scan.columns.includes("ROE %") || scan.columns.includes("Profit Margin %");
   }
 
+  // Small inline sparkline for a multi-year series (nulls allowed). Coloured by
+  // overall direction (first→last), paired with a ▲/▼ value so it's never colour-alone.
+  function sparklineSVG(vals) {
+    const pts = [];
+    (vals || []).forEach((v, i) => { if (v !== null && v !== undefined) pts.push({ i, v }); });
+    if (pts.length < 2) return '<span class="sparkna">— not enough history —</span>';
+    const n = (vals.length - 1) || 1;
+    const ys = pts.map(p => p.v);
+    let lo = Math.min(...ys), hi = Math.max(...ys);
+    if (lo === hi) { lo -= 1; hi += 1; }
+    const W = 100, H = 26, pad = 3;
+    const X = (i) => (i / n) * (W - 2 * pad) + pad;
+    const Y = (v) => H - pad - ((v - lo) / (hi - lo)) * (H - 2 * pad);
+    const line = pts.map((p, k) => (k ? "L" : "M") + X(p.i).toFixed(1) + " " + Y(p.v).toFixed(1)).join(" ");
+    const up = pts[pts.length - 1].v >= pts[0].v;
+    const col = up ? "var(--good)" : "var(--bad)";
+    const last = pts[pts.length - 1];
+    const area = "M" + X(pts[0].i).toFixed(1) + " " + (H - pad) + " " +
+      pts.map(p => "L" + X(p.i).toFixed(1) + " " + Y(p.v).toFixed(1)).join(" ") +
+      " L" + X(last.i).toFixed(1) + " " + (H - pad) + " Z";
+    return '<svg class="spark" viewBox="0 0 ' + W + ' ' + H + '" preserveAspectRatio="none">' +
+      '<path d="' + area + '" fill="' + col + '" opacity="0.13"/>' +
+      '<path d="' + line + '" fill="none" stroke="' + col + '" stroke-width="1.6" vector-effect="non-scaling-stroke"/>' +
+      '<circle cx="' + X(last.i).toFixed(1) + '" cy="' + Y(last.v).toFixed(1) +
+      '" r="2.3" fill="' + col + '" stroke="var(--bg)" stroke-width="1"/></svg>';
+  }
+
+  function trendRow(label, vals, fmt) {
+    const pts = (vals || []).filter(v => v !== null && v !== undefined);
+    if (pts.length < 2)
+      return '<div class="trow"><div class="tk2">' + label + '</div>' +
+             '<span class="sparkna">— n/a —</span><div class="tvv na">n/a</div></div>';
+    const up = pts[pts.length - 1] >= pts[0];
+    const cls = up ? "up" : "down";
+    return '<div class="trow"><div class="tk2">' + label + '</div>' +
+      sparklineSVG(vals) +
+      '<div class="tvv ' + cls + '">' + (up ? "▲ " : "▼ ") + fmt(pts[pts.length - 1]) + "</div></div>";
+  }
+
   function dashboardHTML(r) {
+    const scanObj = state.data.scans[state.scanKey];
+    const hist = (scanObj && scanObj.history || {})[r.Ticker];
     const g = (k) => r[k];                       // raw getter by column name
     const nn = (v) => v !== null && v !== undefined && v !== "";
     const num = (v) => (typeof v === "number" ? v : null);
@@ -755,6 +803,16 @@
         mbar("Int. cover", num(g("Interest Coverage (x)")), "×", 40, 3, true);
     } else {
       h += '<div class="dnote">Limited fundamentals reported for this name (common for REITs &amp; some financials). Showing price, valuation and quality signals only.</div>';
+    }
+
+    // Multi-year trends (populated by the scan; absent on names with no history yet)
+    if (hist && hist.years && hist.years.length >= 2) {
+      const yrs = hist.years;
+      h += '<div class="st">Trends · FY ' + esc(yrs[0]) + "–" + esc(yrs[yrs.length - 1]) + "</div>";
+      h += trendRow("Revenue", hist.revenue, fmtCap);
+      h += trendRow("Earnings", hist.netIncome, fmtCap);
+      h += trendRow("Margin", hist.margin, (v) => v + "%");
+      h += trendRow("ROE", hist.roe, (v) => v + "%");
     }
     return h + "</div>";
   }
