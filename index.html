@@ -155,6 +155,55 @@
       border-radius:.6rem;font-size:.85rem;font-weight:600;opacity:0;pointer-events:none;
       transition:opacity .2s,transform .2s;z-index:60;box-shadow:0 6px 20px rgba(0,0,0,.5);}
     #toast.show{opacity:1;transform:translateX(-50%) translateY(0);}
+    /* detail view toggle (Numbers | Charts) */
+    .viewtoggle{display:inline-flex;background:var(--panel);border:1px solid var(--border);
+      border-radius:.55rem;overflow:hidden;margin:.5rem 0 .2rem;}
+    .viewtoggle button{background:transparent;border:none;color:var(--muted);padding:.4rem .8rem;
+      font-size:.8rem;font-weight:600;cursor:pointer;}
+    .viewtoggle button.on{background:var(--accent);color:#fff;}
+    /* ---- fundamentals dashboard (scoped) ---- */
+    .dash{--good:#4ecb96;--good-bg:rgba(78,203,150,.16);--bad:#e5889b;--bad-bg:rgba(229,136,155,.14);
+      --dmid:#ffcf4d;--mag:#5a9bd4;--mtrack:rgba(255,255,255,.07);margin-top:.6rem;}
+    .dash .st{font-size:.68rem;text-transform:uppercase;letter-spacing:.7px;color:var(--muted);
+      font-weight:700;margin:1.1rem 0 .5rem;display:flex;align-items:center;gap:.4rem;}
+    .dash .st::after{content:"";flex:1;height:1px;background:var(--border);}
+    .dash .track{position:relative;height:30px;margin:1.5rem 0 .3rem;}
+    .dash .track .bar{position:absolute;top:11px;left:0;right:0;height:8px;border-radius:4px;
+      background:linear-gradient(90deg,var(--bad-bg),var(--mtrack) 55%,var(--good-bg));}
+    .dash .track .fill{position:absolute;top:11px;left:0;height:8px;border-radius:4px;background:var(--mag);opacity:.5;}
+    .dash .track .mk{position:absolute;top:5px;width:3px;height:20px;border-radius:2px;background:var(--text);}
+    .dash .track .mk.ath{background:var(--bad);}
+    .dash .track .cap{position:absolute;top:-14px;font-size:.62rem;color:var(--muted);transform:translateX(-50%);white-space:nowrap;}
+    .dash .track .cap.val{top:30px;color:var(--text);font-weight:600;font-variant-numeric:tabular-nums;}
+    .dash .headline{display:flex;align-items:baseline;gap:.5rem;flex-wrap:wrap;margin:.2rem 0 .1rem;}
+    .dash .headline .big{font-size:1.9rem;font-weight:700;color:var(--bad);font-variant-numeric:tabular-nums;}
+    .dash .headline .cap{font-size:.72rem;color:var(--muted);}
+    .dash .tiles{display:grid;grid-template-columns:repeat(3,1fr);gap:.4rem;}
+    .dash .tile{background:var(--panel);border:1px solid var(--border);border-radius:.5rem;padding:.5rem .55rem;}
+    .dash .tile .tk{font-size:.63rem;color:var(--muted);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}
+    .dash .tile .tv{font-size:1.05rem;font-weight:700;font-variant-numeric:tabular-nums;margin-top:.15rem;}
+    .dash .tile .tv small{font-size:.62rem;font-weight:500;color:var(--muted);}
+    .dash .tile.na .tv{color:var(--muted);font-weight:500;font-size:.8rem;}
+    .dash .tile.good{border-color:rgba(78,203,150,.4);} .dash .tile.good .tv{color:var(--good);}
+    .dash .tile.bad .tv{color:var(--bad);}
+    .dash .mrow{display:grid;grid-template-columns:5.4rem 1fr 3.2rem;align-items:center;gap:.5rem;margin:.42rem 0;}
+    .dash .mrow .mk2{font-size:.75rem;color:var(--muted);}
+    .dash .mrow .bw{position:relative;height:14px;background:var(--mtrack);border-radius:7px;overflow:hidden;}
+    .dash .mrow .bw .f{position:absolute;left:0;top:0;height:100%;border-radius:7px;}
+    .dash .mrow .bw .thr{position:absolute;top:-2px;height:18px;width:2px;background:var(--muted);opacity:.6;}
+    .dash .mrow .mv{font-size:.78rem;font-weight:700;text-align:right;font-variant-numeric:tabular-nums;}
+    .dash .mrow .mv.na{color:var(--muted);font-weight:500;}
+    .dash .f.good{background:var(--good);} .dash .f.mid{background:var(--dmid);} .dash .f.mag{background:var(--mag);}
+    .dash .dv{display:grid;grid-template-columns:6.5rem 1fr 1fr;align-items:center;gap:.3rem;margin:.5rem 0;}
+    .dash .dv .dk{font-size:.75rem;color:var(--muted);}
+    .dash .dv .neg,.dash .dv .pos{position:relative;height:16px;}
+    .dash .dv .neg{border-right:2px solid var(--border);}
+    .dash .dv .neg .f{position:absolute;right:0;top:0;height:100%;background:var(--bad);border-radius:4px 0 0 4px;}
+    .dash .dv .pos .f{position:absolute;left:0;top:0;height:100%;background:var(--good);border-radius:0 4px 4px 0;}
+    .dash .dv .lab{position:absolute;top:-1px;font-size:.72rem;font-weight:700;font-variant-numeric:tabular-nums;}
+    .dash .dv .pos .lab{left:6px;color:var(--good);} .dash .dv .neg .lab{right:6px;color:var(--bad);}
+    .dash .dnote{background:var(--panel);border:1px solid var(--border);border-radius:.5rem;
+      padding:.5rem .6rem;font-size:.72rem;color:var(--muted);margin-top:.5rem;}
   </style>
 </head>
 <body>
@@ -222,6 +271,7 @@
     query: "",
     sortCol: null,
     sortDir: "desc",
+    detailView: localStorage.getItem("detail_view") || "overview",  // "overview" | "charts"
   };
 
   // ---- watchlists (persisted on THIS device) ----
@@ -569,6 +619,114 @@
       : "";
   }
 
+  // ---- fundamentals dashboard (Oversold names) ----
+  // A scan can show the charts view when it carries fundamentals.
+  function scanHasFundamentals(scan) {
+    return scan.columns.includes("ROE %") || scan.columns.includes("Profit Margin %");
+  }
+
+  function dashboardHTML(r) {
+    const g = (k) => r[k];                       // raw getter by column name
+    const nn = (v) => v !== null && v !== undefined && v !== "";
+    const num = (v) => (typeof v === "number" ? v : null);
+
+    // quality ring numerator/denominator (denominator parsed from "12/12")
+    const q = num(g("Quality Score"));
+    let qd = 12;
+    const qstr = g("Quality (of known criteria)");
+    if (typeof qstr === "string" && qstr.includes("/")) qd = parseInt(qstr.split("/")[1], 10) || qd;
+
+    function ring() {
+      if (!nn(q)) return "";
+      const pct = qd ? q / qd : 0, R = 20, C = 2 * Math.PI * R, off = C * (1 - pct);
+      const col = pct >= 0.75 ? "var(--good)" : pct >= 0.4 ? "var(--dmid)" : "var(--bad)";
+      return '<div style="text-align:center;flex:none;margin-left:auto">' +
+        '<svg width="52" height="52" viewBox="0 0 52 52">' +
+        '<circle cx="26" cy="26" r="' + R + '" fill="none" stroke="rgba(255,255,255,.12)" stroke-width="5"/>' +
+        '<circle cx="26" cy="26" r="' + R + '" fill="none" stroke="' + col + '" stroke-width="5" stroke-linecap="round" ' +
+        'stroke-dasharray="' + C + '" stroke-dashoffset="' + off + '" transform="rotate(-90 26 26)"/>' +
+        '<text x="26" y="24" text-anchor="middle" fill="var(--text)" font-size="15" font-weight="700">' + q + '</text>' +
+        '<text x="26" y="35" text-anchor="middle" fill="var(--muted)" font-size="8">of ' + qd + '</text></svg>' +
+        '<div style="font-size:.56rem;color:var(--muted);text-transform:uppercase;letter-spacing:.4px">Quality</div></div>';
+    }
+    function tile(label, v, unit, cls) {
+      if (!nn(v)) return '<div class="tile na"><div class="tk">' + label + '</div><div class="tv">n/a</div></div>';
+      return '<div class="tile ' + (cls || "") + '"><div class="tk">' + label + '</div>' +
+             '<div class="tv">' + v + '<small>' + (unit || "") + '</small></div></div>';
+    }
+    function mbar(label, v, unit, max, thr, higherBetter) {
+      if (!nn(v)) return '<div class="mrow"><div class="mk2">' + label + '</div><div class="bw"></div><div class="mv na">n/a</div></div>';
+      const w = Math.max(2, Math.min(100, (v / max) * 100));
+      const good = higherBetter === false ? v <= thr : v >= thr;
+      const thrPct = Math.min(100, (thr / max) * 100);
+      return '<div class="mrow"><div class="mk2">' + label + '</div>' +
+        '<div class="bw"><div class="f ' + (good ? "good" : "mag") + '" style="width:' + w + '%"></div>' +
+        '<div class="thr" style="left:' + thrPct + '%"></div></div><div class="mv">' + v + unit + '</div></div>';
+    }
+    function growth(label, v) {
+      if (!nn(v)) return '<div class="dv"><div class="dk">' + label + '</div><div class="neg"></div>' +
+        '<div class="pos"><span class="lab" style="color:var(--muted)">n/a</span></div></div>';
+      const mag = Math.min(100, Math.abs(v) / 25 * 100);
+      if (v >= 0) return '<div class="dv"><div class="dk">' + label + '</div><div class="neg"></div>' +
+        '<div class="pos"><div class="f" style="width:' + mag + '%"></div><span class="lab">▲ ' + v + '%</span></div></div>';
+      return '<div class="dv"><div class="dk">' + label + '</div>' +
+        '<div class="neg"><div class="f" style="width:' + mag + '%"></div><span class="lab">▼ ' + v + '%</span></div><div class="pos"></div></div>';
+    }
+    function track() {
+      const lo = num(g("52wk Low")), hi = num(g("52wk High")), p = num(g("Price")), ath = num(g("All-Time High"));
+      if (!nn(lo) || !nn(hi) || !nn(p)) return "";
+      const top = nn(ath) ? Math.max(ath, hi) : hi, span = top - lo || 1;
+      const pos = (x) => Math.max(0, Math.min(100, ((x - lo) / span) * 100));
+      let h = '<div class="track"><div class="bar"></div>' +
+        '<div class="fill" style="width:' + pos(p) + '%"></div>' +
+        '<div class="mk" style="left:' + pos(p) + '%"></div>' +
+        '<div class="cap" style="left:' + pos(lo) + '%">52w low</div>' +
+        '<div class="cap" style="left:' + pos(hi) + '%">52w high</div>' +
+        '<div class="cap val" style="left:' + pos(p) + '%">' + p + '</div>';
+      if (nn(ath)) h += '<div class="mk ath" style="left:' + pos(ath) + '%"></div>' +
+        '<div class="cap" style="left:' + pos(ath) + '%;color:var(--bad)">ATH</div>';
+      return h + "</div>";
+    }
+
+    const belowATH = num(g("% Below ATH")), mc = num(g("Market Cap"));
+    const pe = num(g("Trailing P/E")), fpe = num(g("Forward P/E")), peg = num(g("PEG"));
+    const anyFund = nn(g("ROE %")) || nn(g("Profit Margin %")) || nn(g("ROIC %"));
+
+    let h = '<div class="dash">';
+    if (ring()) h += '<div style="display:flex;align-items:flex-start;gap:.7rem">' +
+      '<div style="flex:1"><div class="st" style="margin-top:.2rem">Price vs range</div></div>' + ring() + '</div>';
+    else h += '<div class="st">Price vs range</div>';
+    h += track();
+    if (nn(belowATH)) h += '<div class="headline"><span class="big">−' + belowATH + '%</span>' +
+      '<span class="cap">below all-time high' + (nn(mc) ? ' · mkt cap ' + fmtCap(mc) : "") + '</span></div>';
+
+    h += '<div class="st">Valuation</div><div class="tiles">' +
+      tile("Trailing P/E", pe) +
+      tile("Forward P/E", fpe, "", (nn(fpe) && nn(pe) && fpe < pe) ? "good" : "") +
+      tile("PEG", peg, "", nn(peg) ? (peg < 1 ? "good" : peg > 2 ? "bad" : "") : "") +
+      tile("P/B", num(g("P/B"))) +
+      tile("Div Yield", num(g("Div Yield %")), "%") +
+      tile("Analyst upside", num(g("Analyst Upside %")), "%", (num(g("Analyst Upside %")) > 0) ? "good" : "") +
+      "</div>";
+
+    if (anyFund) {
+      h += '<div class="st">Returns &amp; margin</div>' +
+        mbar("ROE", num(g("ROE %")), "%", 60, 15, true) +
+        mbar("ROIC", num(g("ROIC %")), "%", 60, 12, true) +
+        mbar("ROCE", num(g("ROCE %")), "%", 60, 12, true) +
+        mbar("Profit margin", num(g("Profit Margin %")), "%", 40, 10, true) +
+        '<div class="st">Growth (YoY)</div>' +
+        growth("Revenue", num(g("Revenue Gr YoY %"))) +
+        growth("Earnings", num(g("Earnings Gr YoY %"))) +
+        '<div class="st">Financial health</div>' +
+        mbar("Debt/Equity", num(g("Debt/Equity")), "", 200, 100, false) +
+        mbar("Int. cover", num(g("Interest Coverage (x)")), "×", 40, 3, true);
+    } else {
+      h += '<div class="dnote">Limited fundamentals reported for this name (common for REITs &amp; some financials). Showing price, valuation and quality signals only.</div>';
+    }
+    return h + "</div>";
+  }
+
   // ---- detail sheet ----
   function openDetail(entry) {
     const r = entry.r;
@@ -616,25 +774,39 @@
       '<a class="actbtn" href="' + esc(yurl) + '" target="_blank" rel="noopener">Chart ↗</a>' +
       "</div>" +
       '<div class="acthint">Copy → paste into Trading 212 search · Chart opens Yahoo Finance</div>';
-    if (signalCols.length) {
-      html += '<div class="sec-title">Signals</div><div class="signals">';
-      for (const c of signalCols) {
-        const v = r[c];
-        const truthy = v === true || v === 1 || v === "TRUE" || v === "True";
-        const falsy  = v === false || v === 0 || v === "FALSE" || v === "False";
-        const cls = truthy ? "pass" : falsy ? "fail" : "unk";
-        const mark = truthy ? "✓" : falsy ? "✗" : "—";
-        html += '<span class="sig ' + cls + '">' + mark + " " + esc(c.replace(/\?$/, "")) + "</span>";
-      }
-      html += "</div>";
+
+    // Charts view is available for scans that carry fundamentals (Oversold).
+    const canChart = scanHasFundamentals(scan);
+    if (canChart) {
+      html += '<div class="viewtoggle" id="dViewToggle">' +
+        '<button data-view="overview" class="' + (state.detailView === "overview" ? "on" : "") + '">📋 Numbers</button>' +
+        '<button data-view="charts" class="' + (state.detailView === "charts" ? "on" : "") + '">📊 Charts</button></div>';
     }
-    if (metricCols.length) {
-      html += '<div class="sec-title">Metrics</div><div class="metrics">';
-      for (const c of metricCols) {
-        html += '<div class="k">' + esc(c) + '</div><div class="v">' +
-                cellHTML(c, r[c], sf, sMax) + "</div>";
+
+    if (canChart && state.detailView === "charts") {
+      html += dashboardHTML(r);
+    } else {
+      // Numbers view: signal chips + full metric list (also the only view for the 150 scan)
+      if (signalCols.length) {
+        html += '<div class="sec-title">Signals</div><div class="signals">';
+        for (const c of signalCols) {
+          const v = r[c];
+          const truthy = v === true || v === 1 || v === "TRUE" || v === "True";
+          const falsy  = v === false || v === 0 || v === "FALSE" || v === "False";
+          const cls = truthy ? "pass" : falsy ? "fail" : "unk";
+          const mark = truthy ? "✓" : falsy ? "✗" : "—";
+          html += '<span class="sig ' + cls + '">' + mark + " " + esc(c.replace(/\?$/, "")) + "</span>";
+        }
+        html += "</div>";
       }
-      html += "</div>";
+      if (metricCols.length) {
+        html += '<div class="sec-title">Metrics</div><div class="metrics">';
+        for (const c of metricCols) {
+          html += '<div class="k">' + esc(c) + '</div><div class="v">' +
+                  cellHTML(c, r[c], sf, sMax) + "</div>";
+        }
+        html += "</div>";
+      }
     }
     const note = r["Notes/Error"];
     if (note && String(note).trim()) {
@@ -659,6 +831,12 @@
     };
     const cp = $("dBody").querySelector("#dCopy");
     if (cp) cp.onclick = () => copyText(cp.getAttribute("data-copy"));
+    const vt = $("dBody").querySelector("#dViewToggle");
+    if (vt) vt.querySelectorAll("button").forEach(b => b.onclick = () => {
+      state.detailView = b.getAttribute("data-view");
+      localStorage.setItem("detail_view", state.detailView);
+      openDetail(entry);   // rebuild the sheet in the chosen view
+    });
   }
 
   // ---- clipboard + toast ----
