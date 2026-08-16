@@ -155,6 +155,9 @@
     .actbtn:active{background:var(--panel2);}
     .acthint{font-size:.72rem;color:var(--muted);margin:.1rem 0 .2rem;}
     /* Ask Claude chips */
+    .askbox{border:1px solid var(--border);border-radius:.7rem;padding:.1rem .75rem .7rem;
+      margin:.75rem 0 .3rem;background:rgba(255,255,255,.02);}
+    .askbox .sec-title{margin:.65rem 0 .4rem;}
     .askhint{font-size:.72rem;color:var(--muted);margin:.1rem 0 .4rem;}
     .askchips{display:flex;flex-wrap:wrap;gap:.4rem;}
     .askchip{background:var(--panel);border:1px solid var(--border);color:var(--text);
@@ -872,12 +875,13 @@
       '<div class="acthint">Copy → paste into Trading 212 search · Chart opens Yahoo Finance</div>';
 
     // Ask Claude: prepared questions that hand off to the user's Claude account.
-    html += '<div class="sec-title">Ask Claude</div>' +
+    // Boxed so it reads as distinct from the in-app Numbers/Charts view below.
+    html += '<div class="askbox"><div class="sec-title">Ask Claude</div>' +
       '<div class="askhint">Copies a prompt (with this stock\'s data) and opens Claude — paste &amp; send.</div>' +
       '<div class="askchips">' +
       ASK_QUESTIONS.map((qq, i) => '<button class="askchip" data-q="' + i + '">' +
         qq.icon + " " + esc(qq.label) + "</button>").join("") +
-      "</div>";
+      "</div></div>";
 
     // Charts view is available for scans that carry fundamentals (Oversold).
     const canChart = scanHasFundamentals(scan);
