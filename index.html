@@ -167,7 +167,7 @@
     .dash .st{font-size:.68rem;text-transform:uppercase;letter-spacing:.7px;color:var(--muted);
       font-weight:700;margin:1.1rem 0 .5rem;display:flex;align-items:center;gap:.4rem;}
     .dash .st::after{content:"";flex:1;height:1px;background:var(--border);}
-    .dash .track{position:relative;height:30px;margin:1.5rem 0 .3rem;}
+    .dash .track{position:relative;height:30px;margin:2.1rem 0 1.7rem;}
     .dash .track .bar{position:absolute;top:11px;left:0;right:0;height:8px;border-radius:4px;
       background:linear-gradient(90deg,var(--bad-bg),var(--mtrack) 55%,var(--good-bg));}
     .dash .track .fill{position:absolute;top:11px;left:0;height:8px;border-radius:4px;background:var(--mag);opacity:.5;}
@@ -696,8 +696,11 @@
         '<div class="cap" style="left:' + ph + '%;transform:' + capT(ph) + '">52w high</div>' +
         '<div class="cap val" style="left:' + pp + '%;transform:' + capT(pp) + '">' + p + '</div>';
       if (nn(ath)) { const pa = pos(ath);
+        // If ATH sits close to the 52w-high label, lift it onto a second line
+        // so the two never merge into one another.
+        const lift = Math.abs(pa - ph) < 16 ? ";top:-30px" : "";
         h += '<div class="mk ath" style="left:' + pa + '%"></div>' +
-             '<div class="cap" style="left:' + pa + '%;transform:' + capT(pa) + ';color:var(--bad)">ATH</div>'; }
+             '<div class="cap" style="left:' + pa + '%;transform:' + capT(pa) + ';color:var(--bad)' + lift + '">ATH</div>'; }
       return h + "</div>";
     }
 
