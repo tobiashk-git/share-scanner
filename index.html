@@ -58,10 +58,11 @@
     table{border-collapse:separate;border-spacing:0;width:max-content;min-width:100%;
       font-size:.8rem;font-variant-numeric:tabular-nums;}
     thead th{position:sticky;top:0;z-index:5;background:var(--panel2);color:#dbe8fa;
-      font-weight:600;text-align:right;padding:.5rem .55rem;white-space:nowrap;cursor:pointer;
+      font-weight:600;text-align:center;vertical-align:bottom;padding:.5rem .5rem;
+      white-space:normal;min-width:2.7rem;cursor:pointer;
       border-bottom:1px solid var(--border);user-select:none;}
     thead th .arrow{opacity:.5;font-size:.7em;}
-    tbody td{padding:.45rem .55rem;text-align:right;white-space:nowrap;border-bottom:1px solid var(--border);}
+    tbody td{padding:.45rem .5rem;text-align:center;white-space:nowrap;border-bottom:1px solid var(--border);}
     /* sticky first column (Ticker) */
     th.sticky,td.sticky{position:sticky;left:0;z-index:6;text-align:left;background:var(--panel);
       box-shadow:1px 0 0 var(--border);font-weight:600;}
@@ -75,7 +76,8 @@
     .s-hi{background:var(--yes-bg);color:var(--yes);}
     .s-mid{background:rgba(255,214,138,.15);color:#ffd98a;}
     .s-lo{background:var(--no-bg);color:var(--no);}
-    .name{max-width:12rem;overflow:hidden;text-overflow:ellipsis;}
+    .name{max-width:11rem;overflow:hidden;text-overflow:ellipsis;text-align:left;}
+    thead th.name{white-space:nowrap;}
     /* states */
     .msg{padding:2.5rem 1.5rem;text-align:center;color:var(--muted);}
     .spinner{width:1.6rem;height:1.6rem;border:3px solid var(--border);border-top-color:#7ee0b0;
@@ -571,7 +573,9 @@
     let html = "<table><thead><tr>";
     cols.forEach((c, i) => {
       const arrow = c === state.sortCol ? (state.sortDir === "asc" ? " ▲" : " ▼") : "";
-      html += '<th class="' + (i === 0 ? "sticky" : "") + '" data-col="' + esc(c) + '">' +
+      let thc = i === 0 ? "sticky" : "";
+      if (c === "Name") thc += " name";
+      html += '<th class="' + thc.trim() + '" data-col="' + esc(c) + '">' +
               esc(c) + '<span class="arrow">' + arrow + "</span></th>";
     });
     html += "</tr></thead><tbody>";
