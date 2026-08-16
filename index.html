@@ -154,6 +154,12 @@
       padding:.5rem .85rem;font-size:.85rem;font-weight:600;cursor:pointer;text-decoration:none;}
     .actbtn:active{background:var(--panel2);}
     .acthint{font-size:.72rem;color:var(--muted);margin:.1rem 0 .2rem;}
+    /* Ask Claude chips */
+    .askhint{font-size:.72rem;color:var(--muted);margin:.1rem 0 .4rem;}
+    .askchips{display:flex;flex-wrap:wrap;gap:.4rem;}
+    .askchip{background:var(--panel);border:1px solid var(--border);color:var(--text);
+      border-radius:.6rem;padding:.45rem .7rem;font-size:.8rem;font-weight:600;cursor:pointer;text-align:left;}
+    .askchip:active{background:var(--panel2);border-color:rgba(126,224,176,.4);}
     #toast{position:fixed;left:50%;bottom:2.4rem;transform:translateX(-50%) translateY(1rem);
       background:#0c1626;border:1px solid var(--border);color:var(--text);padding:.55rem .95rem;
       border-radius:.6rem;font-size:.85rem;font-weight:600;opacity:0;pointer-events:none;
@@ -865,6 +871,14 @@
       "</div>" +
       '<div class="acthint">Copy → paste into Trading 212 search · Chart opens Yahoo Finance</div>';
 
+    // Ask Claude: prepared questions that hand off to the user's Claude account.
+    html += '<div class="sec-title">Ask Claude</div>' +
+      '<div class="askhint">Copies a prompt (with this stock\'s data) and opens Claude — paste &amp; send.</div>' +
+      '<div class="askchips">' +
+      ASK_QUESTIONS.map((qq, i) => '<button class="askchip" data-q="' + i + '">' +
+        qq.icon + " " + esc(qq.label) + "</button>").join("") +
+      "</div>";
+
     // Charts view is available for scans that carry fundamentals (Oversold).
     const canChart = scanHasFundamentals(scan);
     if (canChart) {
@@ -926,12 +940,85 @@
     };
     const cp = $("dBody").querySelector("#dCopy");
     if (cp) cp.onclick = () => copyText(cp.getAttribute("data-copy"));
+    $("dBody").querySelectorAll(".askchip").forEach(el => el.onclick = () => {
+      askClaude(buildAskPrompt(r, scan, ASK_QUESTIONS[+el.getAttribute("data-q")].q));
+    });
     const vt = $("dBody").querySelector("#dViewToggle");
     if (vt) vt.querySelectorAll("button").forEach(b => b.onclick = () => {
       state.detailView = b.getAttribute("data-view");
       localStorage.setItem("detail_view", state.detailView);
       openDetail(entry);   // rebuild the sheet in the chosen view
     });
+  }
+
+  // ---- Ask Claude ----
+  // Each chip copies a prompt (pre-loaded with the stock's scan data) and opens
+  // Claude. The app can't call Claude directly (static site, public repo = no
+  // safe place for an API key), so it hands off to the user's own Claude account
+  // where their financial-analyst skills live.
+  const ASK_QUESTIONS = [
+    { icon: "📰", label: "Latest news", q: "What's the latest news on this company, and what's driving the share price right now?" },
+    { icon: "📉", label: "Why so far down?", q: "Why is it trading so far below its all-time high — is it cheap for a good reason (temporary sentiment) or a bad one (a structurally broken business)?" },
+    { icon: "⚖️", label: "Bull vs bear", q: "Give me the bull case and the bear case for this stock as an investment right now." },
+    { icon: "📊", label: "Earnings & guidance", q: "Summarise the company's most recent earnings results and forward guidance, and how the market received them." },
+    { icon: "🏁", label: "Competitors", q: "Who are this company's main competitors, and how does it compare with them on growth, margins and valuation?" },
+    { icon: "⚠️", label: "Key risks", q: "What are the key risks to watch for this company over the next 12 months?" },
+  ];
+
+  function askContext(r, scan) {
+    const lines = [];
+    const add = (label, key, unit) => {
+      const v = r[key];
+      if (v !== null && v !== undefined && v !== "") lines.push("- " + label + ": " + v + (unit || ""));
+    };
+    const sector = [r.Sector, r["Sub-Industry"]].filter(Boolean).join(" / ");
+    const head = (r.Name || r.Ticker) + " (" + r.Ticker + ")" + (sector ? " — " + sector : "");
+    const isOversold = scan.columns.includes("ROE %") || scan.columns.includes("% Below ATH");
+    if (isOversold) {
+      add("% below all-time high", "% Below ATH", "%");
+      add("Quality score", "Quality (of known criteria)");
+      add("Price", "Price");
+      add("Trailing P/E", "Trailing P/E");
+      add("Forward P/E", "Forward P/E");
+      add("PEG", "PEG");
+      add("P/B", "P/B");
+      add("ROE", "ROE %", "%");
+      add("Profit margin", "Profit Margin %", "%");
+      add("Revenue growth YoY", "Revenue Gr YoY %", "%");
+      add("Earnings growth YoY", "Earnings Gr YoY %", "%");
+      add("Debt/Equity", "Debt/Equity");
+      add("Analyst upside", "Analyst Upside %", "%");
+    } else {
+      add("Price", "Price");
+      add("Accumulation score", "Accumulation Score (0-4)");
+      add("RSI(14)", "RSI(14)");
+      add("150-day MA turned up?", "MA Turned Up?");
+      add("OBV rising?", "OBV Rising?");
+      add("Up/down volume ratio", "Up/Down Vol Ratio");
+      add("60-day range", "60d Range %", "%");
+    }
+    return head + "\n" + lines.join("\n");
+  }
+
+  function buildAskPrompt(r, scan, question) {
+    const isOversold = scan.columns.includes("ROE %") || scan.columns.includes("% Below ATH");
+    const screen = isOversold
+      ? "oversold-quality (beaten-down but still fundamentally healthy)"
+      : "early-accumulation / technical";
+    return "I'm researching a stock from my personal " + screen + " stock screen. " +
+      "Here's the data I already have:\n\n" + askContext(r, scan) + "\n\nQuestion: " + question;
+  }
+
+  function askClaude(prompt) {
+    const done = () => showToast("Prompt copied — paste into Claude if it isn't already there");
+    if (navigator.clipboard && navigator.clipboard.writeText) {
+      navigator.clipboard.writeText(prompt).then(done).catch(() => fallbackCopy(prompt, done));
+    } else {
+      fallbackCopy(prompt, done);
+    }
+    // Open Claude. ?q= pre-fills where still supported; otherwise it's ignored
+    // and the copied prompt is pasted. Called synchronously to satisfy popup rules.
+    window.open("https://claude.ai/new?q=" + encodeURIComponent(prompt), "_blank", "noopener");
   }
 
   // ---- clipboard + toast ----
