@@ -961,6 +961,7 @@
   // safe place for an API key), so it hands off to the user's own Claude account
   // where their financial-analyst skills live.
   const ASK_QUESTIONS = [
+    { icon: "🏢", label: "What they do", q: "Give me a plain-English overview of what this company actually does — its main products or services, how it makes money, roughly how big it is, and where it operates. Assume I'm not familiar with it." },
     { icon: "📰", label: "Latest news", q: "What's the latest news on this company, and what's driving the share price right now?" },
     { icon: "📉", label: "Why so far down?", q: "Why is it trading so far below its all-time high — is it cheap for a good reason (temporary sentiment) or a bad one (a structurally broken business)?" },
     { icon: "⚖️", label: "Bull vs bear", q: "Give me the bull case and the bear case for this stock as an investment right now." },
