@@ -6,7 +6,7 @@
 //     when online but the last successful scan still shows when offline.
 // Bump CACHE_VERSION whenever the app shell changes to retire old caches.
 
-const CACHE_VERSION = "scanner-v15";
+const CACHE_VERSION = "scanner-v16";
 const SHELL = [
   "./",
   "./index.html",

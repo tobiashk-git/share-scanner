@@ -542,8 +542,8 @@
     const isWL = state.tabType === "watchlist";
     // column order: Ticker, Name, <score>, then the rest (minus hidden & dupes)
     let cols = scan.columns.filter(c => !HIDDEN_COLS.has(c));
-    // Ticker, Name, score, then Analyst Upside (only exists on Oversold), then the rest.
-    const front = ["Ticker", "Name", sf, "Analyst Upside %"];
+    // Ticker, Name, score, then % Below ATH + Analyst Upside (Oversold only), then the rest.
+    const front = ["Ticker", "Name", sf, "% Below ATH", "Analyst Upside %"];
     cols = [...front.filter(c => cols.includes(c)), ...cols.filter(c => !front.includes(c))];
 
     const entries = currentRows();
