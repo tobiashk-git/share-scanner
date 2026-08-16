@@ -194,14 +194,14 @@
     .dash .mrow .mv{font-size:.78rem;font-weight:700;text-align:right;font-variant-numeric:tabular-nums;}
     .dash .mrow .mv.na{color:var(--muted);font-weight:500;}
     .dash .f.good{background:var(--good);} .dash .f.mid{background:var(--dmid);} .dash .f.mag{background:var(--mag);}
-    .dash .dv{display:grid;grid-template-columns:6.5rem 1fr 1fr;align-items:center;gap:.3rem;margin:.5rem 0;}
+    .dash .dv{display:grid;grid-template-columns:5.4rem 1fr 1fr 3.2rem;align-items:center;gap:.3rem;margin:.5rem 0;}
     .dash .dv .dk{font-size:.75rem;color:var(--muted);}
     .dash .dv .neg,.dash .dv .pos{position:relative;height:16px;}
     .dash .dv .neg{border-right:2px solid var(--border);}
     .dash .dv .neg .f{position:absolute;right:0;top:0;height:100%;background:var(--bad);border-radius:4px 0 0 4px;}
     .dash .dv .pos .f{position:absolute;left:0;top:0;height:100%;background:var(--good);border-radius:0 4px 4px 0;}
-    .dash .dv .lab{position:absolute;top:-1px;font-size:.72rem;font-weight:700;font-variant-numeric:tabular-nums;}
-    .dash .dv .pos .lab{left:6px;color:var(--good);} .dash .dv .neg .lab{right:6px;color:var(--bad);}
+    .dash .dv .dvv{font-size:.78rem;font-weight:700;text-align:right;font-variant-numeric:tabular-nums;}
+    .dash .dv .dvv.up{color:var(--good);} .dash .dv .dvv.down{color:var(--bad);} .dash .dv .dvv.na{color:var(--muted);font-weight:500;}
     .dash .dnote{background:var(--panel);border:1px solid var(--border);border-radius:.5rem;
       padding:.5rem .6rem;font-size:.72rem;color:var(--muted);margin-top:.5rem;}
   </style>
@@ -664,27 +664,40 @@
         '<div class="thr" style="left:' + thrPct + '%"></div></div><div class="mv">' + v + unit + '</div></div>';
     }
     function growth(label, v) {
-      if (!nn(v)) return '<div class="dv"><div class="dk">' + label + '</div><div class="neg"></div>' +
-        '<div class="pos"><span class="lab" style="color:var(--muted)">n/a</span></div></div>';
-      const mag = Math.min(100, Math.abs(v) / 25 * 100);
-      if (v >= 0) return '<div class="dv"><div class="dk">' + label + '</div><div class="neg"></div>' +
-        '<div class="pos"><div class="f" style="width:' + mag + '%"></div><span class="lab">▲ ' + v + '%</span></div></div>';
-      return '<div class="dv"><div class="dk">' + label + '</div>' +
-        '<div class="neg"><div class="f" style="width:' + mag + '%"></div><span class="lab">▼ ' + v + '%</span></div><div class="pos"></div></div>';
+      let bar, val;
+      if (!nn(v)) {
+        bar = '<div class="neg"></div><div class="pos"></div>';
+        val = '<span class="dvv na">n/a</span>';
+      } else {
+        const mag = Math.min(100, Math.abs(v) / 25 * 100);
+        if (v >= 0) {
+          bar = '<div class="neg"></div><div class="pos"><div class="f" style="width:' + mag + '%"></div></div>';
+          val = '<span class="dvv up">▲ ' + v + '%</span>';
+        } else {
+          bar = '<div class="neg"><div class="f" style="width:' + mag + '%"></div></div><div class="pos"></div>';
+          val = '<span class="dvv down">▼ ' + v + '%</span>';
+        }
+      }
+      return '<div class="dv"><div class="dk">' + label + '</div>' + bar + val + "</div>";
     }
     function track() {
       const lo = num(g("52wk Low")), hi = num(g("52wk High")), p = num(g("Price")), ath = num(g("All-Time High"));
       if (!nn(lo) || !nn(hi) || !nn(p)) return "";
       const top = nn(ath) ? Math.max(ath, hi) : hi, span = top - lo || 1;
       const pos = (x) => Math.max(0, Math.min(100, ((x - lo) / span) * 100));
+      // Keep edge labels on-screen: left-align near 0%, right-align near 100%,
+      // centre in between (a plain translateX(-50%) clips "52w low" off the left).
+      const capT = (x) => x < 12 ? "translateX(0)" : x > 88 ? "translateX(-100%)" : "translateX(-50%)";
+      const pl = pos(lo), ph = pos(hi), pp = pos(p);
       let h = '<div class="track"><div class="bar"></div>' +
-        '<div class="fill" style="width:' + pos(p) + '%"></div>' +
-        '<div class="mk" style="left:' + pos(p) + '%"></div>' +
-        '<div class="cap" style="left:' + pos(lo) + '%">52w low</div>' +
-        '<div class="cap" style="left:' + pos(hi) + '%">52w high</div>' +
-        '<div class="cap val" style="left:' + pos(p) + '%">' + p + '</div>';
-      if (nn(ath)) h += '<div class="mk ath" style="left:' + pos(ath) + '%"></div>' +
-        '<div class="cap" style="left:' + pos(ath) + '%;color:var(--bad)">ATH</div>';
+        '<div class="fill" style="width:' + pp + '%"></div>' +
+        '<div class="mk" style="left:' + pp + '%"></div>' +
+        '<div class="cap" style="left:' + pl + '%;transform:' + capT(pl) + '">52w low</div>' +
+        '<div class="cap" style="left:' + ph + '%;transform:' + capT(ph) + '">52w high</div>' +
+        '<div class="cap val" style="left:' + pp + '%;transform:' + capT(pp) + '">' + p + '</div>';
+      if (nn(ath)) { const pa = pos(ath);
+        h += '<div class="mk ath" style="left:' + pa + '%"></div>' +
+             '<div class="cap" style="left:' + pa + '%;transform:' + capT(pa) + ';color:var(--bad)">ATH</div>'; }
       return h + "</div>";
     }
 
