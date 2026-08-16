@@ -58,10 +58,12 @@
     table{border-collapse:separate;border-spacing:0;width:max-content;min-width:100%;
       font-size:.8rem;font-variant-numeric:tabular-nums;}
     thead th{position:sticky;top:0;z-index:5;background:var(--panel2);color:#dbe8fa;
-      font-weight:600;text-align:center;vertical-align:bottom;padding:.5rem .5rem;
-      white-space:normal;min-width:2.7rem;cursor:pointer;
-      border-bottom:1px solid var(--border);user-select:none;}
+      font-weight:600;text-align:center;vertical-align:bottom;padding:.5rem .4rem;
+      white-space:nowrap;cursor:pointer;border-bottom:1px solid var(--border);user-select:none;}
     thead th .arrow{opacity:.5;font-size:.7em;}
+    /* Cap header text width so multi-word headers WRAP (shrinking the column).
+       Needed because the table is max-content, which otherwise never wraps. */
+    .thw{display:inline-block;max-width:4.2rem;white-space:normal;line-height:1.15;vertical-align:bottom;}
     tbody td{padding:.45rem .5rem;text-align:center;white-space:nowrap;border-bottom:1px solid var(--border);}
     /* sticky first column (Ticker) */
     th.sticky,td.sticky{position:sticky;left:0;z-index:6;text-align:left;background:var(--panel);
@@ -575,8 +577,10 @@
       const arrow = c === state.sortCol ? (state.sortDir === "asc" ? " ▲" : " ▼") : "";
       let thc = i === 0 ? "sticky" : "";
       if (c === "Name") thc += " name";
-      html += '<th class="' + thc.trim() + '" data-col="' + esc(c) + '">' +
-              esc(c) + '<span class="arrow">' + arrow + "</span></th>";
+      const label = esc(c) + '<span class="arrow">' + arrow + "</span>";
+      // Ticker/Name stay on one line (left labels); value headers wrap via .thw.
+      const inner = (i === 0 || c === "Name") ? label : '<span class="thw">' + label + "</span>";
+      html += '<th class="' + thc.trim() + '" data-col="' + esc(c) + '">' + inner + "</th>";
     });
     html += "</tr></thead><tbody>";
     entries.forEach((e, ri) => {
