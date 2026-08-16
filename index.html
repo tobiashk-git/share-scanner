@@ -255,6 +255,13 @@
   const $ = (id) => document.getElementById(id);
   const HIDDEN_COLS = new Set(["Notes/Error"]); // don't clutter the table with mostly-empty error text
 
+  // Supplemental "What these mean" definitions for columns the scan's own legend
+  // doesn't document. Only added if the scan has the column AND its legend lacks
+  // it, so once a scanner's legend covers it, this quietly stops duplicating.
+  const EXTRA_LEGEND = {
+    "Analyst Upside %": "How far the analysts' average (mean) 12-month price target sits above today's price: (mean target price ÷ current price − 1) × 100, from Yahoo Finance's consensus. Positive = the average analyst target is above the current price (the quality score credits a positive upside). Blank if the stock has no analyst coverage.",
+  };
+
   // The two strategies, each with a paired user-curated watchlist. Only these
   // scan keys are shown (the old defensive "watchlist" scan is no longer a tab).
   const STRATEGY_DEFS = [
@@ -531,7 +538,8 @@
     const isWL = state.tabType === "watchlist";
     // column order: Ticker, Name, <score>, then the rest (minus hidden & dupes)
     let cols = scan.columns.filter(c => !HIDDEN_COLS.has(c));
-    const front = ["Ticker", "Name", sf];
+    // Ticker, Name, score, then Analyst Upside (only exists on Oversold), then the rest.
+    const front = ["Ticker", "Name", sf, "Analyst Upside %"];
     cols = [...front.filter(c => cols.includes(c)), ...cols.filter(c => !front.includes(c))];
 
     const entries = currentRows();
@@ -829,8 +837,13 @@
       html += '<div class="notes">' + esc(String(note)) + "</div>";
     }
     if (scan.legend && scan.legend.length) {
+      const documented = new Set(scan.legend.map(([f]) => f));
+      const merged = [...scan.legend];
+      for (const [f, def] of Object.entries(EXTRA_LEGEND)) {
+        if (scan.columns.includes(f) && !documented.has(f)) merged.push([f, def]);
+      }
       html += '<details class="method"><summary>What these mean</summary><dl class="method">';
-      for (const [field, def] of scan.legend) {
+      for (const [field, def] of merged) {
         html += "<dt>" + esc(field) + "</dt><dd>" + esc(def) + "</dd>";
       }
       html += "</dl></details>";
